@@ -133,25 +133,27 @@ func main() {
 	}
 
 	c := colly.NewCollector()
-	var articles []Article
-	for _, url := range urls {
-		article := getArticle(c, url)
-		articles = append(articles, article)
-	}
 
-	c.OnRequest(func(r *colly.Request) {
-		fmt.Println("Visiting", r.URL)
-	})
-
-	data, _ := json.MarshalIndent(articles, "", "  ")
-	file, err := os.Create("wikipedia-article-text.json")
+	file, err := os.Create("wikipedia-article-text.jl")
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer file.Close()
 
-	err = os.WriteFile("wikipedia-article-text.json", data, 0644)
-	if err != nil {
-		log.Fatal(err)
+	c.OnRequest(func(r *colly.Request) {
+		fmt.Println("Visiting", r.URL)
+	})
+
+	for _, url := range urls {
+		article := getArticle(c, url)
+		data, _ := json.Marshal(article)
+		_, err := file.Write(data)
+		if err != nil {
+			log.Fatal(err)
+		}
+		_, err = file.WriteString("\n")
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 }
