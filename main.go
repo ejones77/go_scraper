@@ -16,23 +16,14 @@ type Paragraph struct {
 	Links []Link `json:"links"`
 }
 
-type Article struct {
-	Title      string      `json:"text"`
-	Paragraphs []Paragraph `json:"paragraphs"`
-}
-
-/*
 type Section struct {
-	Title string `json:"title"`
+	Title      string      `json:"title"`
 	Paragraphs []Paragraph `json:"paragraphs"`
 }
 
 type Article struct {
-	Title        string      `json:"title"`
-	Introduction []Paragraph   `json:"introduction"`
-	Sections     []Section  `json:"sections"`
+	Sections []Section `json:"sections"`
 }
-*/
 
 func getLinks(e *colly.HTMLElement) []Link {
 	var links []Link
@@ -58,13 +49,27 @@ func getParagraphs(e *colly.HTMLElement) []Paragraph {
 	return paragraphs
 }
 
+func getSections(e *colly.HTMLElement) []Section {
+	var sections []Section
+	e.ForEach("h2", func(_ int, e *colly.HTMLElement) {
+		section := Section{
+			Title:      e.Text,
+			Paragraphs: getParagraphs(e),
+		}
+		sections = append(sections, section)
+	})
+	return sections
+}
+
 func getArticle(c *colly.Collector, url string) Article {
 	var article Article
 	c.OnHTML(".mw-content-container", func(e *colly.HTMLElement) {
-		article = Article{
+		introduction := Section{
 			Title:      e.ChildText("#firstHeading"),
 			Paragraphs: getParagraphs(e),
 		}
+		article.Sections = append(article.Sections, introduction)
+		article.Sections = append(article.Sections, getSections(e)...)
 	})
 	c.Visit(url)
 	return article
