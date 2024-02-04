@@ -22,6 +22,7 @@ type Section struct {
 }
 
 type Article struct {
+	Title    string    `json:"title"`
 	Sections []Section `json:"sections"`
 }
 
@@ -65,9 +66,10 @@ func getArticle(c *colly.Collector, url string) Article {
 	var article Article
 	c.OnHTML(".mw-content-container", func(e *colly.HTMLElement) {
 		introduction := Section{
-			Title:      e.ChildText("#firstHeading"),
+			Title:      "Introduction",
 			Paragraphs: getParagraphs(e),
 		}
+		article.Title = e.ChildText("#firstHeading")
 		article.Sections = append(article.Sections, introduction)
 		article.Sections = append(article.Sections, getSections(e)...)
 	})
