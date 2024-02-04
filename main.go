@@ -58,6 +58,14 @@ func getParagraphs(s *goquery.Selection) []Paragraph {
 				Links: getLinks(n),
 			}
 			paragraphs = append(paragraphs, paragraph)
+		} else if n.Get(0).Data == "ul" || n.Get(0).Data == "ol" {
+			n.Find("li").Each(func(_ int, li *goquery.Selection) {
+				paragraph := Paragraph{
+					Text:  li.Text(),
+					Links: getLinks(li),
+				}
+				paragraphs = append(paragraphs, paragraph)
+			})
 		}
 	})
 	return paragraphs
@@ -95,6 +103,7 @@ func getReferences(e *colly.HTMLElement) []Reference {
 func getArticle(c *colly.Collector, url string) Article {
 	var article Article
 	c.OnHTML(".mw-content-container", func(e *colly.HTMLElement) {
+		// Assumes there's introductory text without a section
 		introduction := Section{
 			Title:      "Introduction",
 			Paragraphs: getParagraphs(e.DOM.Find("p")),
@@ -110,22 +119,38 @@ func getArticle(c *colly.Collector, url string) Article {
 }
 
 func main() {
-	url := "https://en.wikipedia.org/wiki/Robotics"
+	urls := []string{
+		"https://en.wikipedia.org/wiki/Robotics",
+		"https://en.wikipedia.org/wiki/Robot",
+		"https://en.wikipedia.org/wiki/Reinforcement_learning",
+		"https://en.wikipedia.org/wiki/Robot_Operating_System",
+		"https://en.wikipedia.org/wiki/Intelligent_agent",
+		"https://en.wikipedia.org/wiki/Software_agent",
+		"https://en.wikipedia.org/wiki/Robotic_process_automation",
+		"https://en.wikipedia.org/wiki/Chatbot",
+		"https://en.wikipedia.org/wiki/Applications_of_artificial_intelligence",
+		"https://en.wikipedia.org/wiki/Android_(robot)",
+	}
 
 	c := colly.NewCollector()
-	article := getArticle(c, url)
+	var articles []Article
+	for _, url := range urls {
+		article := getArticle(c, url)
+		articles = append(articles, article)
+	}
 
 	c.OnRequest(func(r *colly.Request) {
 		fmt.Println("Visiting", r.URL)
 	})
-	data, _ := json.MarshalIndent(article, "", "  ")
-	file, err := os.Create("article.json")
+
+	data, _ := json.MarshalIndent(articles, "", "  ")
+	file, err := os.Create("wikipedia-article-text.json")
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer file.Close()
 
-	err = os.WriteFile("article.json", data, 0644)
+	err = os.WriteFile("wikipedia-article-text.json", data, 0644)
 	if err != nil {
 		log.Fatal(err)
 	}
