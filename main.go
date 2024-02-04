@@ -1,8 +1,12 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"log"
+	"os"
 
+	"github.com/PuerkitoBio/goquery"
 	"github.com/gocolly/colly/v2"
 )
 
@@ -33,36 +37,38 @@ type Article struct {
 	References []Reference `json:"references"`
 }
 
-func getLinks(e *colly.HTMLElement) []Link {
+func getLinks(s *goquery.Selection) []Link {
 	var links []Link
-	e.ForEach("a", func(_ int, e *colly.HTMLElement) {
+	s.Find("a").Each(func(_ int, a *goquery.Selection) {
 		link := Link{
-			Text: e.Text,
-			URL:  e.Attr("href"),
+			Text: a.Text(),
+			URL:  a.AttrOr("href", ""),
 		}
 		links = append(links, link)
 	})
 	return links
 }
 
-func getParagraphs(e *colly.HTMLElement) []Paragraph {
+func getParagraphs(s *goquery.Selection) []Paragraph {
 	var paragraphs []Paragraph
-	e.ForEach("p", func(_ int, e *colly.HTMLElement) {
-		paragraph := Paragraph{
-			Text:  e.Text,
-			Links: getLinks(e),
+	s.Each(func(_ int, n *goquery.Selection) {
+		if n.Get(0).Data == "p" {
+			paragraph := Paragraph{
+				Text:  n.Text(),
+				Links: getLinks(n),
+			}
+			paragraphs = append(paragraphs, paragraph)
 		}
-		paragraphs = append(paragraphs, paragraph)
 	})
 	return paragraphs
 }
 
 func getSections(e *colly.HTMLElement) []Section {
 	var sections []Section
-	e.ForEach("h2", func(_ int, e *colly.HTMLElement) {
+	e.DOM.Find("h2").Each(func(_ int, s *goquery.Selection) {
 		section := Section{
-			Title:      e.Text,
-			Paragraphs: getParagraphs(e),
+			Title:      s.Text(),
+			Paragraphs: getParagraphs(s.NextUntil("h2")),
 		}
 		sections = append(sections, section)
 	})
@@ -72,10 +78,14 @@ func getSections(e *colly.HTMLElement) []Section {
 func getReferences(e *colly.HTMLElement) []Reference {
 	var references []Reference
 	e.ForEach(".reflist li", func(_ int, e *colly.HTMLElement) {
+
+		selection := e.DOM
+		selection.Find("style").Remove()
+
 		reference := Reference{
 			Id:    e.Attr("id"),
-			Text:  e.ChildText(".cite"),
-			Links: getLinks(e),
+			Text:  selection.Text(),
+			Links: getLinks(e.DOM),
 		}
 		references = append(references, reference)
 	})
@@ -87,7 +97,7 @@ func getArticle(c *colly.Collector, url string) Article {
 	c.OnHTML(".mw-content-container", func(e *colly.HTMLElement) {
 		introduction := Section{
 			Title:      "Introduction",
-			Paragraphs: getParagraphs(e),
+			Paragraphs: getParagraphs(e.DOM.Find("p")),
 		}
 		article.Title = e.ChildText("#firstHeading")
 		article.Sections = append(article.Sections, introduction)
@@ -95,6 +105,7 @@ func getArticle(c *colly.Collector, url string) Article {
 		article.References = append(article.References, getReferences(e)...)
 	})
 	c.Visit(url)
+	c.Wait()
 	return article
 }
 
@@ -107,5 +118,15 @@ func main() {
 	c.OnRequest(func(r *colly.Request) {
 		fmt.Println("Visiting", r.URL)
 	})
-	fmt.Printf("%+v\n", article)
+	data, _ := json.MarshalIndent(article, "", "  ")
+	file, err := os.Create("article.json")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer file.Close()
+
+	err = os.WriteFile("article.json", data, 0644)
+	if err != nil {
+		log.Fatal(err)
+	}
 }
