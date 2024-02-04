@@ -21,9 +21,16 @@ type Section struct {
 	Paragraphs []Paragraph `json:"paragraphs"`
 }
 
+type Reference struct {
+	Id    string `json:"id"`
+	Text  string `json:"text"`
+	Links []Link `json:"links"`
+}
+
 type Article struct {
-	Title    string    `json:"title"`
-	Sections []Section `json:"sections"`
+	Title      string      `json:"title"`
+	Sections   []Section   `json:"sections"`
+	References []Reference `json:"references"`
 }
 
 func getLinks(e *colly.HTMLElement) []Link {
@@ -62,6 +69,19 @@ func getSections(e *colly.HTMLElement) []Section {
 	return sections
 }
 
+func getReferences(e *colly.HTMLElement) []Reference {
+	var references []Reference
+	e.ForEach(".reflist li", func(_ int, e *colly.HTMLElement) {
+		reference := Reference{
+			Id:    e.Attr("id"),
+			Text:  e.ChildText(".cite"),
+			Links: getLinks(e),
+		}
+		references = append(references, reference)
+	})
+	return references
+}
+
 func getArticle(c *colly.Collector, url string) Article {
 	var article Article
 	c.OnHTML(".mw-content-container", func(e *colly.HTMLElement) {
@@ -72,6 +92,7 @@ func getArticle(c *colly.Collector, url string) Article {
 		article.Title = e.ChildText("#firstHeading")
 		article.Sections = append(article.Sections, introduction)
 		article.Sections = append(article.Sections, getSections(e)...)
+		article.References = append(article.References, getReferences(e)...)
 	})
 	c.Visit(url)
 	return article
@@ -79,6 +100,7 @@ func getArticle(c *colly.Collector, url string) Article {
 
 func main() {
 	url := "https://en.wikipedia.org/wiki/Robotics"
+
 	c := colly.NewCollector()
 	article := getArticle(c, url)
 
